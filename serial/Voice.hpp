@@ -7,7 +7,7 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
-
+#include <pthread.h>
 using namespace std;
 
 class Voice
