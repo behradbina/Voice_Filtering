@@ -15,13 +15,17 @@ int main() {
     Voice voice(inputFile, audioData, fileInfo);
     auto timeEnd = std::chrono::high_resolution_clock::now();
     std::cout << "Read Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+
+
     timeStart = std::chrono::high_resolution_clock::now();
     voice.band_pass_filter(low, high);
     timeEnd = std::chrono::high_resolution_clock::now();
     std::cout << "Bound pass filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+
+
     //timeStart = std::chrono::high_resolution_clock::now();
     //voice.notch_filter(removed_frequency);
-    timeEnd = std::chrono::high_resolution_clock::now();
+    //timeEnd = std::chrono::high_resolution_clock::now();
     //std::cout << "Notch filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
     
     voice.writeWavFile(outputFile, fileInfo);

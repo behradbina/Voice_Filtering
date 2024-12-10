@@ -5,7 +5,7 @@ Voice::Voice(const string& _inputFile, vector<float>& _data, SF_INFO& fileInfo)
 {
     data = _data;
     input_file = _inputFile;
-    readWavFile(_inputFile, _data, fileInfo);
+    readWavFile(_inputFile, data, fileInfo);
 }
 
 Voice::~Voice()
@@ -50,8 +50,6 @@ void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
     sf_close(outFile);
     std::cout << "Successfully wrote " << numFrames << " frames to " << outputFile << std::endl;
 }
-
-
 
 void Voice::band_pass_filter(float down, float up) {
     float delta_f = (up - down) / 2.0f;  // Bandwidth
