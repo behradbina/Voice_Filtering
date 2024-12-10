@@ -23,5 +23,7 @@ public:
     void writeWavFile(const string& outputFile, SF_INFO& fileInfo);
     void band_pass_filter(float down, float up);
     void notch_filter(float removed_frequency);
+    void fir_filter(const vector<float>& coefficients);
+    void iir_filter(const vector<float>& feedforward, const vector<float>& feedback);
 };
 
