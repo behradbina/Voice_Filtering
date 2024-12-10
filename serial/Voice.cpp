@@ -1,9 +1,11 @@
 #include "Voice.hpp"
 
 
-Voice::Voice(const string& inputFile, vector<float>& data, SF_INFO& fileInfo)
+Voice::Voice(const string& _inputFile, vector<float>& _data, SF_INFO& fileInfo)
 {
-    readWavFile(inputFile, data, fileInfo);
+    data = _data;
+    input_file = _inputFile;
+    readWavFile(_inputFile, _data, fileInfo);
 }
 
 Voice::~Voice()
@@ -30,7 +32,7 @@ void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& f
     std::cout << "Successfully read " << numFrames << " frames from " << inputFile << std::endl;
 }
 
-void Voice::writeWavFile(const string& outputFile, const vector<float>& data,  SF_INFO& fileInfo) {
+void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
     sf_count_t originalFrames = fileInfo.frames;
     SNDFILE* outFile = sf_open(outputFile.c_str(), SFM_WRITE, &fileInfo);
     if (!outFile) {
@@ -47,5 +49,22 @@ void Voice::writeWavFile(const string& outputFile, const vector<float>& data,  S
 
     sf_close(outFile);
     std::cout << "Successfully wrote " << numFrames << " frames to " << outputFile << std::endl;
+}
+
+
+
+void Voice::band_pass_filter(float down, float up) {
+    float delta_f = (up - down) / 2.0f;  // Bandwidth
+    for (size_t i = 0; i < data.size(); ++i) {
+        float f = i * (1.0f / data.size()); // Simulated frequency value
+        float h_f = (f * f) / (f * f + delta_f * delta_f); // Filter formula
+
+        // Amplify or attenuate the signal based on the filter response
+        if (f >= down && f <= up) {
+            data[i] *= h_f; // Apply band-pass
+        } else {
+            data[i] = 0.0f; // Attenuate frequencies outside the band
+        }
+    }
 }
 
