@@ -20,25 +20,19 @@ Voice::~Voice()
 //         std::cerr << "Error opening input file: " << sf_strerror(NULL) << std::endl;
 //         exit(1);
 //     }
-
 //     // Resize the data buffer to accommodate all samples
 //     data.resize(fileInfo.frames * fileInfo.channels);
-
 //     size_t numThreads = 4; // Number of threads
 //     pthread_t threads[numThreads];
 //     ThreadData threadData[numThreads];
-
 //     size_t chunkSize = data.size() / numThreads;
-
 //     for (size_t i = 0; i < numThreads; ++i) {
 //         threadData[i] = {this, i * chunkSize, (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize, inFile};
 //         pthread_create(&threads[i], nullptr, readChunk, &threadData[i]);
 //     }
-
 //     for (size_t i = 0; i < numThreads; ++i) {
 //         pthread_join(threads[i], nullptr);
 //     }
-
 //     sf_close(inFile);
 //     std::cout << "Successfully read " << fileInfo.frames << " frames from " << inputFile << std::endl;
 // }
@@ -68,44 +62,35 @@ void* Voice::readChunk(void* arg) {
     return nullptr;
 }
 
-
 // void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
 //     SNDFILE* outFile = sf_open(outputFile.c_str(), SFM_WRITE, &fileInfo);
 //     if (!outFile) {
 //         std::cerr << "Error opening output file: " << sf_strerror(NULL) << std::endl;
 //         exit(1);
 //     }
-
 //     size_t numThreads = 4; // Number of threads
 //     pthread_t threads[numThreads];
 //     ThreadData threadData[numThreads];
-
 //     size_t chunkSize = data.size() / numThreads;
-
 //     for (size_t i = 0; i < numThreads; ++i) {
 //         threadData[i] = {this, i * chunkSize, (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize};
 //         threadData[i].output_file = output_file;
 //         pthread_create(&threads[i], nullptr, writeChunk, &threadData[i]);
 //     }
-
 //     for (size_t i = 0; i < numThreads; ++i) {
 //         pthread_join(threads[i], nullptr);
 //     }
-
 //     sf_close(outFile);
 //     std::cout << "Successfully wrote " << fileInfo.frames << " frames to " << outputFile << std::endl;
 // }
-
 // void* Voice::writeChunk(void* arg) {
 //     ThreadData* threadData = static_cast<ThreadData*>(arg);
 //     Voice* voice = threadData->voice;
 //     size_t start = threadData->start;
 //     size_t end = threadData->end;
 //     string out = threadData->output_file;
-    
 //     // Calculate the chunk size
 //     size_t chunkSize = end - start;
-
 //     // Open the file in append mode (ensure thread-safe writing)
 //     SF_INFO fileInfo = voice->fileInfo; // Copy file information
 //     SNDFILE* outFile = sf_open(out.c_str(), SFM_WRITE, &fileInfo);
@@ -113,7 +98,6 @@ void* Voice::readChunk(void* arg) {
 //         std::cerr << "Error opening output file: " << sf_strerror(NULL) << std::endl;
 //         pthread_exit(nullptr);
 //     }
-
 //     // Write only the specific chunk of frames
 //     sf_count_t numFrames = sf_writef_float(outFile, voice->data.data() + start, chunkSize);
 //     if (numFrames != chunkSize) {
@@ -122,30 +106,25 @@ void* Voice::readChunk(void* arg) {
 //         sf_close(outFile);
 //         pthread_exit(nullptr);
 //     }
-
 //     sf_close(outFile);
 //     pthread_exit(nullptr);
 // }
 
+// void Voice::fir_filter() {
+//     vector<float> coefficients_xi(data.size(), 0.1f);
+//     vector<float> filtered_data(data.size(), 0.0f);
+//     size_t filter_order = coefficients_xi.size();
 
+//     for (size_t i = 0; i < data.size(); ++i) {
+//         for (size_t k = 0; k < filter_order; ++k) {
+//             if (i >= k) {
+//                 filtered_data[i] += coefficients_xi[k] * data[i - k];
+//             }
+//         }
+//     }
 
-void Voice::fir_filter() {
-    cout << "data.size() : " << data.size() << endl;
-    vector<float> coefficients_xi(data.size(), 0.1f);
-    cout << "coefficients.size() : " << coefficients_xi.size() << endl;
-    vector<float> filtered_data(data.size(), 0.5f);
-    size_t filter_order = coefficients_xi.size();
-
-    for (size_t i = 0; i < data.size(); ++i) {
-        for (size_t k = 0; k < filter_order; ++k) {
-            if (i >= k) {
-                filtered_data[i] += coefficients_xi[k] * data[i - k];
-            }
-        }
-    }
-
-    data = filtered_data;
-}
+//     data = filtered_data;
+// }
 
 void Voice::iir_filter() {
     vector<float> filtered_data(data.size(), 0.0f);
@@ -282,3 +261,54 @@ void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo) {
 
     data = filteredData; // Replace original data with filtered data
 }
+
+void* firWorker(void* arg) {
+    FirThreadData* threadData = static_cast<FirThreadData*>(arg);
+    const auto& data = *threadData->data;
+    auto& filtered_data = *threadData->filtered_data;
+    const auto& coefficients = *threadData->coefficients;
+    size_t filter_order = threadData->filter_order;
+    size_t start = threadData->start;
+    size_t end = threadData->end;
+
+    for (size_t i = start; i < end; ++i) {
+        for (size_t k = 0; k < filter_order; ++k) {
+            if (i >= k) {
+                filtered_data[i] += coefficients[k] * data[i - k];
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+void Voice::fir_filter() {
+    std::vector<float> coefficients_xi(data.size(), 0.1f); // Example coefficients
+    std::vector<float> filtered_data(data.size(), 0.0f);
+    size_t filter_order = coefficients_xi.size();
+    size_t numThreads = 4; // Number of threads
+    pthread_t threads[numThreads];
+    FirThreadData threadData[numThreads];
+
+    size_t chunkSize = data.size() / numThreads;
+
+    for (size_t i = 0; i < numThreads; ++i) {
+        size_t start = i * chunkSize;
+        size_t end = (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize;
+
+        // Expand the start index for overlap (boundary condition)
+        size_t expandedStart = (start > filter_order) ? start - filter_order : 0;
+
+        threadData[i] = {expandedStart, end, &data, &filtered_data, &coefficients_xi, filter_order};
+
+        pthread_create(&threads[i], nullptr, firWorker, &threadData[i]);
+    }
+
+    for (size_t i = 0; i < numThreads; ++i) {
+        pthread_join(threads[i], nullptr);
+    }
+
+    // Assign the computed filtered data back to the class member
+    data = filtered_data;
+}
+

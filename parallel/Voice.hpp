@@ -10,6 +10,14 @@
 
 using namespace std;
 
+struct FirThreadData {
+    size_t start, end;                  // Range of indices to process
+    const std::vector<float>* data;     // Pointer to the input data
+    std::vector<float>* filtered_data;  // Pointer to the output data
+    const std::vector<float>* coefficients; // Pointer to FIR coefficients
+    size_t filter_order;                // Filter order
+};
+
 struct NotchThreadData {
     std::vector<float>* data;
     std::vector<float>* filteredData;
