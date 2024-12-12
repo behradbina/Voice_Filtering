@@ -4,6 +4,7 @@
 Voice::Voice(const string& _inputFile, vector<float>& _data, SF_INFO& fileInfo)
 {
     data = _data;
+    output_file = "output.wav";
     input_file = _inputFile;
     readWavFile(_inputFile, data, fileInfo);
 }
@@ -55,6 +56,7 @@ void Voice::band_pass_filter(float down, float up) {
     float delta_f = (up - down) / 2.0f;  // Bandwidth
     for (size_t i = 0; i < data.size(); ++i) {
         float f = i * (1.0f / data.size()); // Simulated frequency value
+        
         float h_f = (f * f) / (f * f + delta_f * delta_f); // Filter formula
 
         // Amplify or attenuate the signal based on the filter response
@@ -65,6 +67,7 @@ void Voice::band_pass_filter(float down, float up) {
         }
     }
 }
+
 void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
     SNDFILE* inFile = sf_open(inputFile.c_str(), SFM_READ, &fileInfo);
     if (!inFile) {
@@ -97,14 +100,17 @@ void* Voice::readChunk(void* arg) {
     Voice* voice = threadData->voice;
     size_t start = threadData->start;
     size_t end = threadData->end;
-
-    sf_count_t numFrames = sf_readf_float(voice->data.data() + start, end - start);
+    string input = threadData->output_file;
+    SF_INFO fileInfo;
+    SNDFILE* inFile = sf_open(input.c_str(), SFM_READ, &fileInfo);
+    sf_count_t numFrames = sf_readf_float(inFile, voice->data.data() + start, end - start);
     if (numFrames != end - start) {
         std::cerr << "Error reading frames from file in chunk." << std::endl;
         exit(1);
     }
     return nullptr;
 }
+
 void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
     SNDFILE* outFile = sf_open(outputFile.c_str(), SFM_WRITE, &fileInfo);
     if (!outFile) {
@@ -120,6 +126,7 @@ void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
 
     for (size_t i = 0; i < numThreads; ++i) {
         threadData[i] = {this, i * chunkSize, (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize};
+        threadData[i].output_file = output_file;
         pthread_create(&threads[i], nullptr, writeChunk, &threadData[i]);
     }
 
@@ -136,13 +143,85 @@ void* Voice::writeChunk(void* arg) {
     Voice* voice = threadData->voice;
     size_t start = threadData->start;
     size_t end = threadData->end;
+    string out = threadData->output_file;
+    
+    // Calculate the chunk size
+    size_t chunkSize = end - start;
 
-    sf_count_t numFrames = sf_writef_float(voice->data.data() + start, end - start);
-    if (numFrames != end - start) {
-        std::cerr << "Error writing frames to file in chunk." << std::endl;
-        exit(1);
+    // Open the file in append mode (ensure thread-safe writing)
+    SF_INFO fileInfo = voice->fileInfo; // Copy file information
+    SNDFILE* outFile = sf_open(out.c_str(), SFM_WRITE, &fileInfo);
+    if (!outFile) {
+        std::cerr << "Error opening output file: " << sf_strerror(NULL) << std::endl;
+        pthread_exit(nullptr);
     }
-    return nullptr;
+
+    // Write only the specific chunk of frames
+    sf_count_t numFrames = sf_writef_float(outFile, voice->data.data() + start, chunkSize);
+    if (numFrames != chunkSize) {
+        std::cerr << "Error writing frames to file in chunk. Expected: " << chunkSize
+                  << ", but wrote: " << numFrames << std::endl;
+        sf_close(outFile);
+        pthread_exit(nullptr);
+    }
+
+    sf_close(outFile);
+    pthread_exit(nullptr);
+}
+
+void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo) 
+{
+    int numSamples = data.size();
+    int sampleRate = fileInfo.samplerate;
+    vector<float> filteredData(numSamples);
+    for (int i = 0; i < numSamples; ++i) 
+    {
+        float f = (sampleRate * i) / numSamples;
+        float response = (1.0 / (pow((f / f0), 2 * n) + 1));
+        filteredData[i] = data[i] * response;
+    }
+    data = filteredData;
+}
+
+void Voice::fir_filter() {
+    cout << "data.size() : " << data.size() << endl;
+    vector<float> coefficients_xi(data.size(), 0.1f);
+    cout << "coefficients.size() : " << coefficients_xi.size() << endl;
+    vector<float> filtered_data(data.size(), 0.0f);
+    size_t filter_order = coefficients_xi.size();
+
+    for (size_t i = 0; i < data.size(); ++i) {
+        for (size_t k = 0; k < filter_order; ++k) {
+            if (i >= k) {
+                filtered_data[i] += coefficients_xi[k] * data[i - k];
+            }
+        }
+    }
+
+    data = filtered_data;
+}
+
+void Voice::iir_filter() {
+    vector<float> filtered_data(data.size(), 0.0f);
+    vector<float>feedforward (data.size(), 0.1f);
+    vector<float>feedback (data.size(), 0.5f);
+    size_t ff_order = feedforward.size();
+    size_t fb_order = feedback.size();
+    
+    for (size_t i = 0; i < data.size(); ++i) {
+        for (size_t k = 0; k < ff_order; ++k) {
+            if (i >= k) {
+                filtered_data[i] += feedforward[k] * data[i - k];
+            }
+        }
+        for (size_t j = 1; j < fb_order; ++j) { // j starts from 1 to avoid infinite recursion
+            if (i >= j) {
+                filtered_data[i] -= feedback[j] * filtered_data[i - j];
+            }
+        }
+    }
+
+    data = filtered_data;
 }
 
 
