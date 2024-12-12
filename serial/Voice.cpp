@@ -16,20 +16,20 @@ void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& f
     SNDFILE* inFile = sf_open(inputFile.c_str(), SFM_READ, &fileInfo);
     
     if (!inFile) {
-        std::cerr << "Error opening input file: " << sf_strerror(NULL) << std::endl;
+        cerr << "Error opening input file: " << sf_strerror(NULL) << endl;
         exit(1);
     }
 
     data.resize(fileInfo.frames * fileInfo.channels);
     sf_count_t numFrames = sf_readf_float(inFile, data.data(), fileInfo.frames);
     if (numFrames != fileInfo.frames) {
-        std::cerr << "Error reading frames from file." << std::endl;
+        cerr << "Error reading frames from file." << endl;
         sf_close(inFile);
         exit(1);
     }
 
     sf_close(inFile);
-    std::cout << "Successfully read " << numFrames << " frames from " << inputFile << std::endl;
+    cout << "Successfully read " << numFrames << " frames from " << inputFile << endl;
 }
 
 void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
@@ -66,31 +66,31 @@ void Voice::band_pass_filter(float down, float up) {
     }
 }
 
-void Voice::notch_filter(float removed_frequency) {
-    float f0 = removed_frequency; // Frequency to be removed
-    float f; // Current frequency
-    size_t n = 2; // Order of the filter (can be parameterized if needed)
-    
-    for (size_t i = 0; i < data.size(); ++i) {
-        f = static_cast<float>(i) / data.size(); // Simulated frequency value (normalized)
-        
-        // Calculate H(f) based on the formula
-        float h_f = 1.0f / (1.0f + pow(f / f0, 2 * n));
-        
-        // Apply the notch filter to suppress the target frequency
-        data[i] *= h_f;
+void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo) 
+{
+    int numSamples = data.size();
+    int sampleRate = fileInfo.samplerate;
+    vector<float> filteredData(numSamples);
+    for (int i = 0; i < numSamples; ++i) 
+    {
+        float f = (sampleRate * i) / numSamples;
+        float response = (1.0 / (pow((f / f0), 2 * n) + 1));
+        filteredData[i] = data[i] * response;
     }
+    data = filteredData;
 }
 
-
-void Voice::fir_filter(const vector<float>& coefficients) {
+void Voice::fir_filter() {
+    cout << "data.size() : " << data.size() << endl;
+    vector<float> coefficients_xi(data.size(), 0.1f);
+    cout << "coefficients.size() : " << coefficients_xi.size() << endl;
     vector<float> filtered_data(data.size(), 0.0f);
-    size_t filter_order = coefficients.size();
+    size_t filter_order = coefficients_xi.size();
 
     for (size_t i = 0; i < data.size(); ++i) {
         for (size_t k = 0; k < filter_order; ++k) {
             if (i >= k) {
-                filtered_data[i] += coefficients[k] * data[i - k];
+                filtered_data[i] += coefficients_xi[k] * data[i - k];
             }
         }
     }
@@ -98,11 +98,13 @@ void Voice::fir_filter(const vector<float>& coefficients) {
     data = filtered_data;
 }
 
-void Voice::iir_filter(const vector<float>& feedforward, const vector<float>& feedback) {
+void Voice::iir_filter() {
     vector<float> filtered_data(data.size(), 0.0f);
+    vector<float>feedforward (data.size(), 0.1f);
+    vector<float>feedback (data.size(), 0.5f);
     size_t ff_order = feedforward.size();
     size_t fb_order = feedback.size();
-
+    
     for (size_t i = 0; i < data.size(); ++i) {
         for (size_t k = 0; k < ff_order; ++k) {
             if (i >= k) {
@@ -118,5 +120,4 @@ void Voice::iir_filter(const vector<float>& feedforward, const vector<float>& fe
 
     data = filtered_data;
 }
-
 

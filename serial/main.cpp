@@ -1,13 +1,12 @@
 #include "Voice.hpp"
 //int argc, char* argv[]
 
-int main() {
-    
-	
+int main() 
+{
     string inputFile = "input.wav";
     string outputFile = "output.wav";
     float low = 300.0f, high= 3400.0f;
-    //float removed_frequency;
+    float removed_frequency = 1000.0f;
     SF_INFO fileInfo;
     vector<float> audioData;
 
@@ -16,6 +15,9 @@ int main() {
     auto timeEnd = std::chrono::high_resolution_clock::now();
     std::cout << "Read Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
 
+    
+    vector<float> coefficients_yi(audioData.size(), 0.5f);
+    
 
     timeStart = std::chrono::high_resolution_clock::now();
     voice.band_pass_filter(low, high);
@@ -23,11 +25,23 @@ int main() {
     std::cout << "Bound pass filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
 
 
-    //timeStart = std::chrono::high_resolution_clock::now();
-    //voice.notch_filter(removed_frequency);
-    //timeEnd = std::chrono::high_resolution_clock::now();
-    //std::cout << "Notch filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+    timeStart = std::chrono::high_resolution_clock::now();
+    voice.notch_filter(removed_frequency, 2, fileInfo);
+    timeEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "Notch filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
     
+    timeStart = std::chrono::high_resolution_clock::now();
+    voice.fir_filter();
+    timeEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "Fir filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+
+
+    timeStart = std::chrono::high_resolution_clock::now();
+    voice.iir_filter();
+    timeEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "iir filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+
+
     timeStart = std::chrono::high_resolution_clock::now();
     voice.writeWavFile(outputFile, fileInfo);
     timeEnd = std::chrono::high_resolution_clock::now();
