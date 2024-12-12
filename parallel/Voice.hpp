@@ -10,6 +10,24 @@
 
 using namespace std;
 
+struct NotchThreadData {
+    std::vector<float>* data;
+    std::vector<float>* filteredData;
+    float f0;
+    int n;
+    int sampleRate;
+    size_t startIdx;
+    size_t endIdx;
+};
+
+struct BandPassThreadData {
+    std::vector<float>* data;
+    float down;
+    float up;
+    size_t startIdx;
+    size_t endIdx;
+};
+
 class Voice
 {
 private:
@@ -22,7 +40,7 @@ private:
         Voice* voice;
         size_t start;
         size_t end;
-        string output_file;
+        SNDFILE* inFile;
     };
 
     static void* readChunk(void* arg);

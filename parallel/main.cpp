@@ -15,10 +15,6 @@ int main()
     auto timeEnd = std::chrono::high_resolution_clock::now();
     std::cout << "Read Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
 
-    
-    vector<float> coefficients_yi(audioData.size(), 0.5f);
-    
-
     timeStart = std::chrono::high_resolution_clock::now();
     voice.band_pass_filter(low, high);
     timeEnd = std::chrono::high_resolution_clock::now();
@@ -42,11 +38,11 @@ int main()
     std::cout << "iir filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
 
 
-    timeStart = std::chrono::high_resolution_clock::now();
-    voice.writeWavFile(outputFile, fileInfo);
-    timeEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-	std::cout << "Done and the output is in output.bmp" << std::endl;
+    // timeStart = std::chrono::high_resolution_clock::now();
+    // voice.writeWavFile(outputFile, fileInfo);
+    // timeEnd = std::chrono::high_resolution_clock::now();
+    // std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
+	// std::cout << "Done and the output is in output.bmp" << std::endl;
 
     return 0;
 }
