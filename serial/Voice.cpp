@@ -81,9 +81,7 @@ void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo)
 }
 
 void Voice::fir_filter() {
-    cout << "data.size() : " << data.size() << endl;
-    vector<float> coefficients_xi(data.size(), 0.1f);
-    cout << "coefficients.size() : " << coefficients_xi.size() << endl;
+    vector<float> coefficients_xi(COEFFICIENT_SIZE, 0.1f);
     vector<float> filtered_data(data.size(), 0.0f);
     size_t filter_order = coefficients_xi.size();
 
@@ -100,8 +98,8 @@ void Voice::fir_filter() {
 
 void Voice::iir_filter() {
     vector<float> filtered_data(data.size(), 0.0f);
-    vector<float>feedforward (data.size(), 0.1f);
-    vector<float>feedback (data.size(), 0.5f);
+    vector<float>feedforward (COEFFICIENT_SIZE, 0.1f);
+    vector<float>feedback (COEFFICIENT_SIZE, 0.5f);
     size_t ff_order = feedforward.size();
     size_t fb_order = feedback.size();
     
@@ -111,7 +109,7 @@ void Voice::iir_filter() {
                 filtered_data[i] += feedforward[k] * data[i - k];
             }
         }
-        for (size_t j = 1; j < fb_order; ++j) { // j starts from 1 to avoid infinite recursion
+        for (size_t j = 1; j < fb_order; ++j) { 
             if (i >= j) {
                 filtered_data[i] -= feedback[j] * filtered_data[i - j];
             }
@@ -119,5 +117,43 @@ void Voice::iir_filter() {
     }
 
     data = filtered_data;
+}
+
+void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    va_list args;
+    va_start(args, fileInfo);
+
+    if (filter_name == "notch") {
+        float removed_frequency = va_arg(args, double); // Use 'double' because va_arg promotes floats to doubles
+        int n = va_arg(args, int);
+        notch_filter(removed_frequency, n, fileInfo);
+    } 
+    else if (filter_name == "band_pass") {
+        float down = va_arg(args, double);
+        float up = va_arg(args, double);
+        band_pass_filter(down, up);
+    } 
+    else if (filter_name == "fir") {
+        fir_filter();
+    } 
+    else if (filter_name == "iir") {
+        iir_filter();
+    } 
+    else {
+        std::cerr << "Error: Unknown filter name: " << filter_name << std::endl;
+        va_end(args);
+        return;
+    }
+
+    va_end(args);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    cout << "Filter '" << filter_name << "' applied in " << chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms." << std::endl;
+    start_time = chrono::high_resolution_clock::now();
+    writeWavFile(OUTPUT_FILE, fileInfo);
+    end_time = chrono::high_resolution_clock::now(); 
+    cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, milli>>(end_time - start_time).count() << " ms\n";
 }
 

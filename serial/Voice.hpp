@@ -8,7 +8,13 @@
 #include <cmath>
 #include <algorithm>
 #include <pthread.h>
+#include <stdio.h>
+#include <stdarg.h>
+
 using namespace std;
+
+#define COEFFICIENT_SIZE 200
+const string OUTPUT_FILE = "output.wav";
 
 class Voice
 {
@@ -25,5 +31,6 @@ public:
     void notch_filter(float removed_frequency, int n, SF_INFO& fileInfo);
     void fir_filter();
     void iir_filter();
+    void apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...);
 };
 

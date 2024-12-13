@@ -110,43 +110,96 @@ void* Voice::readChunk(void* arg) {
 //     pthread_exit(nullptr);
 // }
 
-// void Voice::fir_filter() {
-//     vector<float> coefficients_xi(data.size(), 0.1f);
-//     vector<float> filtered_data(data.size(), 0.0f);
-//     size_t filter_order = coefficients_xi.size();
-
-//     for (size_t i = 0; i < data.size(); ++i) {
-//         for (size_t k = 0; k < filter_order; ++k) {
-//             if (i >= k) {
-//                 filtered_data[i] += coefficients_xi[k] * data[i - k];
-//             }
-//         }
-//     }
-
-//     data = filtered_data;
-// }
-
-void Voice::iir_filter() {
+void Voice::fir_filter_serial() {
+    vector<float> coefficients_xi(COEFFICIENT_SIZE, 0.1f);
     vector<float> filtered_data(data.size(), 0.0f);
-    vector<float>feedforward (data.size(), 0.1f);
-    vector<float>feedback (data.size(), 0.5f);
-    size_t ff_order = feedforward.size();
-    size_t fb_order = feedback.size();
-    
+    size_t filter_order = coefficients_xi.size();
+
     for (size_t i = 0; i < data.size(); ++i) {
-        for (size_t k = 0; k < ff_order; ++k) {
+        for (size_t k = 0; k < filter_order; ++k) {
             if (i >= k) {
-                filtered_data[i] += feedforward[k] * data[i - k];
-            }
-        }
-        for (size_t j = 1; j < fb_order; ++j) { // j starts from 1 to avoid infinite recursion
-            if (i >= j) {
-                filtered_data[i] -= feedback[j] * filtered_data[i - j];
+                filtered_data[i] += coefficients_xi[k] * data[i - k];
             }
         }
     }
 
     data = filtered_data;
+}
+
+void* applyIIRFilterChunk(void* arg) {
+    auto* data = (IirFilterData*)arg;
+
+    size_t numFeedforward = data->feedforwardCoefficients->size();
+    size_t numFeedback = data->feedbackCoefficients->size();
+
+    if (data->chunkIndex > 0) {
+        std::unique_lock<std::mutex> lock((*data->mutexes)[data->chunkIndex - 1]);
+        (*data->cvs)[data->chunkIndex - 1].wait(lock, [data] {
+            return (*data->completedChunks)[data->chunkIndex - 1];
+        });
+    }
+
+    for (size_t n = data->start; n < data->end; ++n) {
+        // Feedforward part
+        for (size_t k = 0; k < numFeedforward; ++k) {
+            if (n >= k) {
+                (*data->outputSignal)[n] += (*data->feedforwardCoefficients)[k] * (*data->inputSignal)[n - k];
+            }
+        }
+
+    }
+
+    {
+        std::unique_lock<std::mutex> lock((*data->mutexes)[data->chunkIndex]);
+        (*data->completedChunks)[data->chunkIndex] = true;
+        (*data->cvs)[data->chunkIndex].notify_one();
+    }
+
+    for (size_t n = data->start; n < data->end; ++n) {
+        for (size_t k = 1; k <= numFeedback; ++k) {
+            if (n >= k ) {
+                (*data->outputSignal)[n] -= (*data->feedbackCoefficients)[k - 1] * (*data->outputSignal)[n - k];
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+void Voice::iir_filter() {
+    vector<float> outputSignal(data.size(), 0.0f);
+    vector<float>feedforward (COEFFICIENT_SIZE, 0.1f);
+    vector<float>feedback (COEFFICIENT_SIZE, 0.5f);
+
+    int numThreads = 4;
+    size_t signalSize = data.size();
+
+    size_t chunkSize = signalSize / numThreads;
+    std::vector<pthread_t> threads(numThreads);
+    std::vector<IirFilterData> threadData(numThreads);
+
+    // Shared state for synchronization
+    std::vector<std::mutex> mutexes(numThreads);
+    std::vector<std::condition_variable> cvs(numThreads);
+    std::vector<bool> completedChunks(numThreads, false);
+
+    // Create threads
+    for (int i = 0; i < numThreads; ++i) {
+        size_t start = i * chunkSize;
+        size_t end = (i == numThreads - 1) ? signalSize : start + chunkSize;
+
+        threadData[i] = {&data, &outputSignal, &feedforward, &feedback,
+                         start, end, static_cast<size_t>(i), &completedChunks, &mutexes, &cvs};
+
+        pthread_create(&threads[i], nullptr, applyIIRFilterChunk, &threadData[i]);
+    }
+
+    // Wait for threads to finish
+    for (int i = 0; i < numThreads; ++i) {
+        pthread_join(threads[i], nullptr);
+    }
+
+    std::cout << "IIR filter applied using " << numThreads << " threads." << std::endl;
 }
 
 void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
@@ -282,14 +335,53 @@ void* firWorker(void* arg) {
     return nullptr;
 }
 
+void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    va_list args;
+    va_start(args, filter_name);
+
+    if (filter_name == "notch") {
+        float removed_frequency = va_arg(args, double); // Use 'double' because va_arg promotes floats to doubles
+        int n = va_arg(args, int);
+        notch_filter(removed_frequency, n, fileInfo);
+    } 
+    else if (filter_name == "band_pass") {
+        float down = va_arg(args, double);
+        float up = va_arg(args, double);
+        band_pass_filter(down, up);
+    } 
+    else if (filter_name == "fir") {
+        fir_filter();
+    } 
+    else if (filter_name == "iir") {
+        iir_filter_par();
+    } 
+    else {
+        std::cerr << "Error: Unknown filter name: " << filter_name << std::endl;
+        va_end(args);
+        return;
+    }
+
+    va_end(args);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    std::cout << "Filter '" << filter_name << "' applied in " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms." << std::endl;
+    start_time = std::chrono::high_resolution_clock::now();
+    writeWavFile(OUTPUT_FILE, fileInfo);
+    end_time = std::chrono::high_resolution_clock::now(); 
+    std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms\n";
+}
+
 void Voice::fir_filter() {
-    std::vector<float> coefficients_xi(data.size(), 0.1f); // Example coefficients
+    // Create a fixed-size coefficients array
+    std::vector<float> coefficients_xi(COEFFICIENT_SIZE, 0.1f);
     std::vector<float> filtered_data(data.size(), 0.0f);
-    size_t filter_order = coefficients_xi.size();
     size_t numThreads = 4; // Number of threads
     pthread_t threads[numThreads];
     FirThreadData threadData[numThreads];
 
+    // Divide the data into chunks
     size_t chunkSize = data.size() / numThreads;
 
     for (size_t i = 0; i < numThreads; ++i) {
@@ -297,9 +389,9 @@ void Voice::fir_filter() {
         size_t end = (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize;
 
         // Expand the start index for overlap (boundary condition)
-        size_t expandedStart = (start > filter_order) ? start - filter_order : 0;
+        size_t expandedStart = (start > COEFFICIENT_SIZE) ? start - COEFFICIENT_SIZE : 0;
 
-        threadData[i] = {expandedStart, end, &data, &filtered_data, &coefficients_xi, filter_order};
+        threadData[i] = {expandedStart, end, &data, &filtered_data, &coefficients_xi, COEFFICIENT_SIZE};
 
         pthread_create(&threads[i], nullptr, firWorker, &threadData[i]);
     }
@@ -311,4 +403,3 @@ void Voice::fir_filter() {
     // Assign the computed filtered data back to the class member
     data = filtered_data;
 }
-

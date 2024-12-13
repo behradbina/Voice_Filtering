@@ -4,7 +4,6 @@
 int main() 
 {
     string inputFile = "input.wav";
-    string outputFile = "output.wav";
     float low = 300.0f, high= 3400.0f;
     float removed_frequency = 1000.0f;
     SF_INFO fileInfo;
@@ -14,35 +13,11 @@ int main()
     Voice voice(inputFile, audioData, fileInfo);
     auto timeEnd = std::chrono::high_resolution_clock::now();
     std::cout << "Read Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-
-    timeStart = std::chrono::high_resolution_clock::now();
-    voice.band_pass_filter(low, high);
-    timeEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "Bound pass filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-
-
-    timeStart = std::chrono::high_resolution_clock::now();
-    voice.notch_filter(removed_frequency, 2, fileInfo);
-    timeEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "Notch filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
     
-    timeStart = std::chrono::high_resolution_clock::now();
-    voice.fir_filter();
-    timeEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "Fir filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-
-
-    timeStart = std::chrono::high_resolution_clock::now();
-    voice.iir_filter();
-    timeEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "iir filter time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-
-
-    // timeStart = std::chrono::high_resolution_clock::now();
-    // voice.writeWavFile(outputFile, fileInfo);
-    // timeEnd = std::chrono::high_resolution_clock::now();
-    // std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(timeEnd - timeStart).count() << " ms\n";
-	// std::cout << "Done and the output is in output.bmp" << std::endl;
+    //voice.apply_filter("band_pass", fileInfo, low, high);
+    //voice.apply_filter("notch", fileInfo,removed_frequency);
+    //voice.apply_filter("fir", fileInfo);
+    voice.apply_filter("iir", fileInfo);
 
     return 0;
 }

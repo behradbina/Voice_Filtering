@@ -7,8 +7,15 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <stdio.h>
+#include <stdarg.h>
+#include <mutex>
+#include <condition_variable>
 
 using namespace std;
+
+#define COEFFICIENT_SIZE 200
+const string OUTPUT_FILE = "output.wav";
 
 struct FirThreadData {
     size_t start, end;                  // Range of indices to process
@@ -36,6 +43,19 @@ struct BandPassThreadData {
     size_t endIdx;
 };
 
+struct IirFilterData {
+    const std::vector<float>* inputSignal;
+    std::vector<float>* outputSignal;
+    const std::vector<float>* feedforwardCoefficients;
+    const std::vector<float>* feedbackCoefficients;
+    size_t start;
+    size_t end;
+    size_t chunkIndex;
+    std::vector<bool>* completedChunks;
+    std::vector<std::mutex>* mutexes;
+    std::vector<std::condition_variable>* cvs;
+};
+
 class Voice
 {
 private:
@@ -60,8 +80,11 @@ public:
     void band_pass_filter(float down, float up);
     void notch_filter(float removed_frequency, int n, SF_INFO& fileInfo);
     void fir_filter();
+    void fir_filter_serial();
     void iir_filter();
+    void iir_filter_par();
     void readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
     void writeWavFile(const string& outputFile, SF_INFO& fileInfo);
+    void apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...); 
 };
 
