@@ -12,6 +12,16 @@ Voice::~Voice()
 {
 }
 
+void sum_vec(vector<float> filtered_data)
+{
+    float sum = 0;
+    for (size_t i = 0; i < filtered_data.size(); i++)
+    {
+        sum += filtered_data[i];
+    }
+    cout << "sum : " << sum << endl;
+}
+
 void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
     SNDFILE* inFile = sf_open(inputFile.c_str(), SFM_READ, &fileInfo);
     
@@ -51,30 +61,34 @@ void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
     std::cout << "Successfully wrote " << numFrames << " frames to " << outputFile << std::endl;
 }
 
-void Voice::band_pass_filter(float down, float up) {
-    float delta_f = (up - down) / 2.0f;  // Bandwidth
-    for (size_t i = 0; i < data.size(); ++i) {
-        float f = i * (1.0f / data.size()); // Simulated frequency value
-        float h_f = (f * f) / (f * f + delta_f * delta_f); // Filter formula
+void Voice::band_pass_filter(SF_INFO& fileInfo, double down, double up, double deltaFreq) {
+    int sample_numbers = data.size();
+    int sample_rate = fileInfo.samplerate;
+    auto filterResponse = [=](double f) 
+    {
+        return (f * f) / (f * f + deltaFreq * deltaFreq);
+    };
 
-        // Amplify or attenuate the signal based on the filter response
-        if (f >= down && f <= up) {
-            data[i] *= h_f; // Apply band-pass
-        } else {
-            data[i] = 0.0f; // Attenuate frequencies outside the band
-        }
+    for (int i = 0; i < sample_numbers; i++) 
+    {
+        double f = (static_cast<double>(i) * sample_rate) / sample_numbers; 
+        if (f >= down && f <= up) 
+            data[i] = data[i] * filterResponse(f);
+        else 
+            data[i] = 0; 
     }
+   
 }
 
 void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo) 
 {
-    int numSamples = data.size();
+    size_t numSamples = data.size();
     int sampleRate = fileInfo.samplerate;
-    vector<float> filteredData(numSamples);
-    for (int i = 0; i < numSamples; ++i) 
+    vector<float> filteredData(numSamples, 0.0f);
+    for (size_t i = 0; i < numSamples; ++i) 
     {
         float f = (sampleRate * i) / numSamples;
-        float response = (1.0 / (pow((f / f0), 2 * n) + 1));
+        float response = (1.0f / (pow((f / f0), 2 * n) + 1));
         filteredData[i] = data[i] * response;
     }
     data = filteredData;
@@ -92,7 +106,6 @@ void Voice::fir_filter() {
             }
         }
     }
-
     data = filtered_data;
 }
 
@@ -132,7 +145,8 @@ void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) 
     else if (filter_name == "band_pass") {
         float down = va_arg(args, double);
         float up = va_arg(args, double);
-        band_pass_filter(down, up);
+        float delta = va_arg(args, double);
+        band_pass_filter(fileInfo, down, up, delta);
     } 
     else if (filter_name == "fir") {
         fir_filter();
@@ -155,5 +169,6 @@ void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) 
     writeWavFile(OUTPUT_FILE, fileInfo);
     end_time = chrono::high_resolution_clock::now(); 
     cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, milli>>(end_time - start_time).count() << " ms\n";
+    sum_vec(data);
 }
 

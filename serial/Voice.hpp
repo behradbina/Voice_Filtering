@@ -27,7 +27,7 @@ public:
     ~Voice();
     void readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
     void writeWavFile(const string& outputFile, SF_INFO& fileInfo);
-    void band_pass_filter(float down, float up);
+    void band_pass_filter(SF_INFO& fileInfo, double lowerFreq, double upperFreq, double deltaFreq);
     void notch_filter(float removed_frequency, int n, SF_INFO& fileInfo);
     void fir_filter();
     void iir_filter();
