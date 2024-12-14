@@ -83,6 +83,7 @@ public:
     void fir_filter();
     void iir_filter();
     void readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
+    void readWavFile_par(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
     void writeWavFile(const string& outputFile, SF_INFO& fileInfo);
     void apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...); 
 };
