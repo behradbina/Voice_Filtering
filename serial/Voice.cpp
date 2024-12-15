@@ -69,7 +69,7 @@ void Voice::band_pass_filter(SF_INFO& fileInfo, double down, double up, double d
         return (f * f) / (f * f + deltaFreq * deltaFreq);
     };
 
-    for (int i = 0; i < sample_numbers; i++) 
+    for (size_t i = 0; i < sample_numbers; i++) 
     {
         double f = (static_cast<double>(i) * sample_rate) / sample_numbers; 
         if (f >= down && f <= up) 

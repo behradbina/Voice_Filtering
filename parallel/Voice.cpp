@@ -47,7 +47,7 @@ void* Voice::readChunk(void* arg) {
     return nullptr;
 }
 
-void Voice::readWavFile_par(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
+void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
     // Open the input file once
     SNDFILE* inFile = sf_open(inputFile.c_str(), SFM_READ, &fileInfo);
     if (!inFile) {
@@ -68,26 +68,6 @@ void Voice::readWavFile_par(const string& inputFile, vector<float>& data, SF_INF
     }
     sf_close(inFile);
     std::cout << "Successfully read " << fileInfo.frames << " frames from " << inputFile << std::endl;
-}
-
-void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
-    SNDFILE* inFile = sf_open(inputFile.c_str(), SFM_READ, &fileInfo);
-    
-    if (!inFile) {
-        std::cerr << "Error opening input file: " << sf_strerror(NULL) << std::endl;
-        exit(1);
-    }
-
-    data.resize(fileInfo.frames * fileInfo.channels);
-    sf_count_t numFrames = sf_readf_float(inFile, data.data(), fileInfo.frames);
-    if (numFrames != fileInfo.frames) {
-        std::cerr << "Error reading frames from file." << std::endl;
-        sf_close(inFile);
-        exit(1);
-    }
-
-    sf_close(inFile);
-    std::cout << "Successfully read " << numFrames << " frames from " << inputFile << std::endl;
 }
 
 void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
@@ -135,7 +115,7 @@ void* bandPassWorker(void* arg) {
 }
 
 void Voice::band_pass_filter(SF_INFO& fileInfo, double down, double up, double deltaFreq) {
-    size_t numThreads = THREAD_NUMBER;
+    size_t numThreads = THREAD_NUMBER * 2;
     pthread_t threads[numThreads];
     BandPassThreadData threadData[numThreads];
     int sample_rate = fileInfo.samplerate;
@@ -258,7 +238,7 @@ void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) 
 
     std::cout << "Filter '" << filter_name << "' applied in " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms." << std::endl;
     start_time = std::chrono::high_resolution_clock::now();
-    writeWavFile(OUTPUT_FILE, fileInfo);
+    writeWavFile_par(OUTPUT_FILE, fileInfo);
     end_time = std::chrono::high_resolution_clock::now(); 
     std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms\n";
     sum_vec(data);
@@ -345,4 +325,52 @@ void Voice::iir_filter() {
 
     // Update the original data
     data = filtered_data;
+}
+
+void* Voice::writeChunk(void* arg) {
+    ThreadData* threadData = static_cast<ThreadData*>(arg);
+    Voice* voice = threadData->voice;
+    size_t start = threadData->start;
+    size_t end = threadData->end;
+    SNDFILE* outFile = threadData->inFile;
+
+    size_t chunkSize = end - start;
+
+    // Locking for thread-safe access to the file
+    static pthread_mutex_t fileLock = PTHREAD_MUTEX_INITIALIZER;
+
+    pthread_mutex_lock(&fileLock);
+    sf_seek(outFile, start, SEEK_SET); // Move file pointer to the correct position
+    sf_count_t numFrames = sf_writef_float(outFile, voice->data.data() + start, chunkSize);
+    pthread_mutex_unlock(&fileLock);
+
+    if (int(numFrames) != int(chunkSize)) {
+        std::cerr << "Error writing frames to file in chunk." << std::endl;
+        exit(1);
+    }
+
+    return nullptr;
+}
+
+void Voice::writeWavFile_par(const string& outputFile, SF_INFO& fileInfo) {
+    sf_count_t originalFrames = fileInfo.frames;
+    SNDFILE* outFile = sf_open(outputFile.c_str(), SFM_WRITE, &fileInfo);
+    if (!outFile) {
+    std::cerr << "Error opening output file: " << sf_strerror(NULL) << std::endl;
+    exit(1);
+    }
+
+    size_t numThreads = 4;
+    pthread_t threads[numThreads];
+    ThreadData threadData[numThreads];
+    size_t chunkSize = data.size() / numThreads;
+    for (size_t i = 0; i < numThreads; ++i) {
+    threadData[i] = {this, i * chunkSize, (i == numThreads - 1) ? data.size() : (i + 1) * chunkSize, outFile};
+    pthread_create(&threads[i], nullptr, writeChunk, &threadData[i]);
+    }
+    for (size_t i = 0; i < numThreads; ++i) {
+    pthread_join(threads[i], nullptr);
+    }
+    sf_close(outFile);
+    std::cout << "Successfully wrote " << originalFrames << " frames to " << outputFile << std::endl;
 }

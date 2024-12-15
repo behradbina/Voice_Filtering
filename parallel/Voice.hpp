@@ -16,7 +16,7 @@ using namespace std;
 
 #define COEFFICIENT_SIZE 200
 #define THREAD_NUMBER 4
-
+pthread_mutex_t fileWriteMutex = PTHREAD_MUTEX_INITIALIZER;
 const string OUTPUT_FILE = "output.wav";
 
 struct FirThreadData {
@@ -85,6 +85,7 @@ public:
     void readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
     void readWavFile_par(const string& inputFile, vector<float>& data, SF_INFO& fileInfo);
     void writeWavFile(const string& outputFile, SF_INFO& fileInfo);
+    void writeWavFile_par(const string& outputFile, SF_INFO& fileInfo);
     void apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...); 
 };
 
