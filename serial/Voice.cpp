@@ -19,7 +19,8 @@ void sum_vec(vector<float> filtered_data)
     {
         sum += filtered_data[i];
     }
-    cout << "sum : " << sum << endl;
+    cout << "Summation of output frames : " << sum << endl;
+    cout << "-------------------------------------"<<endl;
 }
 
 void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& fileInfo) {
@@ -40,6 +41,7 @@ void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& f
 
     sf_close(inFile);
     cout << "Successfully read " << numFrames << " frames from " << inputFile << endl;
+    cout << "-------------------------------------"<<endl;
 }
 
 void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
@@ -49,7 +51,6 @@ void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
         std::cerr << "Error opening output file: " << sf_strerror(NULL) << std::endl;
         exit(1);
     }
-
     sf_count_t numFrames = sf_writef_float(outFile, data.data(), originalFrames);
     if (numFrames != originalFrames) {
         std::cerr << "Error writing frames to file." << std::endl;

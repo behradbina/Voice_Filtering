@@ -15,8 +15,8 @@
 using namespace std;
 
 #define COEFFICIENT_SIZE 200
-#define THREAD_NUMBER 4
-pthread_mutex_t fileWriteMutex = PTHREAD_MUTEX_INITIALIZER;
+#define THREAD_NUMBER 50
+
 const string OUTPUT_FILE = "output.wav";
 
 struct FirThreadData {

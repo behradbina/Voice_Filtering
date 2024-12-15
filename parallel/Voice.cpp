@@ -19,7 +19,8 @@ void sum_vec(vector<float> filtered_data)
     {
         sum += filtered_data[i];
     }
-    cout << "sum : " << sum << endl;
+    cout << "Summation of output frames : " << sum << endl;
+    cout << "-------------------------------------"<<endl;
 }
 
 void* Voice::readChunk(void* arg) {
@@ -68,6 +69,7 @@ void Voice::readWavFile(const string& inputFile, vector<float>& data, SF_INFO& f
     }
     sf_close(inFile);
     std::cout << "Successfully read " << fileInfo.frames << " frames from " << inputFile << std::endl;
+    cout << "-------------------------------------"<<endl;
 }
 
 void Voice::writeWavFile(const string& outputFile, SF_INFO& fileInfo) {
@@ -115,7 +117,7 @@ void* bandPassWorker(void* arg) {
 }
 
 void Voice::band_pass_filter(SF_INFO& fileInfo, double down, double up, double deltaFreq) {
-    size_t numThreads = THREAD_NUMBER * 2;
+    size_t numThreads = THREAD_NUMBER;
     pthread_t threads[numThreads];
     BandPassThreadData threadData[numThreads];
     int sample_rate = fileInfo.samplerate;
@@ -149,7 +151,6 @@ void* notchFilterWorker(void* arg) {
 }
 
 void Voice::notch_filter(float f0, int n, SF_INFO& fileInfo) {
-    sum_vec(data);
     int numSamples = data.size();
     int sampleRate = fileInfo.samplerate;
     size_t end_index;
@@ -211,7 +212,6 @@ void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) 
     if (filter_name == "notch") {
         float removed_frequency = va_arg(args, double); // Use 'double' because va_arg promotes floats to doubles
         int n = va_arg(args, int);
-        cout << "n :" << n << "removed_frequency : " << removed_frequency << endl;
         notch_filter(removed_frequency, n, fileInfo);
     } 
     else if (filter_name == "band_pass") {
@@ -238,7 +238,7 @@ void Voice::apply_filter(const std::string& filter_name, SF_INFO& fileInfo,...) 
 
     std::cout << "Filter '" << filter_name << "' applied in " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms." << std::endl;
     start_time = std::chrono::high_resolution_clock::now();
-    writeWavFile_par(OUTPUT_FILE, fileInfo);
+    writeWavFile(OUTPUT_FILE, fileInfo);
     end_time = std::chrono::high_resolution_clock::now(); 
     std::cout << "Write Time: " << std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(end_time - start_time).count() << " ms\n";
     sum_vec(data);
@@ -360,7 +360,7 @@ void Voice::writeWavFile_par(const string& outputFile, SF_INFO& fileInfo) {
     exit(1);
     }
 
-    size_t numThreads = 4;
+    size_t numThreads = THREAD_NUMBER;
     pthread_t threads[numThreads];
     ThreadData threadData[numThreads];
     size_t chunkSize = data.size() / numThreads;
